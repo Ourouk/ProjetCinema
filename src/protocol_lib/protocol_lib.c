@@ -1,40 +1,77 @@
 #include "protocol_lib.h"
 
-struct payload *create_payload(const uint8_t type,const uint8_t Code,const uint8_t Status,const uint16_t payload_size,const char *payload)
+
+
+// Function to create a new parameter
+struct Parameter* createParameter(void* data) {
+    struct Parameter* newParameter = (struct Parameter*)malloc(sizeof(struct Parameter));
+    if(newParameter == NULL) {
+        // Handle error here
+        return NULL;
+    }
+    newParameter->data = data;
+    newParameter->next = NULL;
+    return newParameter;
+}
+
+// Function to add a new parameter to the end of the payload
+void appendParameter(struct Parameter** payload, void* data) {
+    struct Parameter* newParameter = createParameter(data);
+    if(*payload == NULL) {
+        *payload = newParameter;
+        return;
+    }
+    struct Parameter* current = *payload;
+    while(current->next != NULL) {
+        current = current->next;
+    }
+    current->next = newParameter;
+}
+
+// Function to delete the entire payload
+void deletePayload(struct Parameter** payload) {
+    struct Parameter* current = *payload;
+    struct Parameter* next;
+
+    while (current != NULL) {
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    *payload = NULL;
+}
+
+struct packet *create_packet(const uint8_t type,const uint8_t Status,const uint16_t payload_size,const char *payload)
 {
-    struct payload *msg = malloc(sizeof(struct payload));
+    struct packet *msg = malloc(sizeof(struct packet));
     msg->type = type;
-    msg->Code = Code;
     msg->Status = Status;
     msg->payload_size = payload_size;
-    msg->payload = payload; 
+    msg->payload = NULL;
+    memcpy(msg->payload,payload,sizeof(char)*payload_size);
     return msg;
 }
 
-void destroy_payload(struct payload *msg)
+void destroy_packet(struct packet *msg)
 {
     if (msg->payload != NULL) {
         free(msg->payload);
     }
 }
 //Note should execute a destroy payload after this
-char *serialize_payload(const struct payload *msg)
+char *serialize_packet(const struct packet *msg)
 {
-    char *buffer = malloc(sizeof(sizeof(struct payload)- sizeof(char *)+msg->payload_size));
-    memcpy(buffer, msg, sizeof(struct payload)- sizeof(char *));
-    memcpy(buffer + sizeof(struct payload)- sizeof(char *), msg->payload, msg->payload_size);
+    char *buffer = malloc(sizeof(sizeof(struct packet)- sizeof(char *)+msg->payload_size));
+    memcpy(buffer, msg, sizeof(struct packet)- sizeof(char *));
+    memcpy(buffer + sizeof(struct packet)- sizeof(char *), msg->payload, msg->payload_size);
     return buffer;
 }
 
-struct payload *deserialize_payload(const char *buffer)
+int send_packet(int socket,const struct packet *msg)
 {
-    return create_payload(buffer[0], buffer[1], buffer[2], (buffer[3] << 8) | buffer[4],buffer[5]);
-}
-
-int send_payload(int socket,struct payload *msg)
-{
-    char *buffer = serialize_payload(msg);
-    int bytes_sent = send(socket, buffer,sizeof(sizeof(struct payload)- sizeof(char *)+msg->payload_size) , 0);
+    char *buffer = serialize_packet(msg);
+    int bytes_sent = send(socket, buffer,sizeof(sizeof(struct packet)- sizeof(char *)+msg->payload_size) , 0);
     if(bytes_sent == -1)
     {
         perror("Error sending data");
@@ -45,15 +82,33 @@ int send_payload(int socket,struct payload *msg)
     }
 }
 
-struct payload *recv_payload(int socket)
+struct packet *recv_packet(int socket)
 {
-    char header_buffer[sizeof(struct payload)- sizeof(char *)];
-    recv(socket, header_buffer, sizeof(u_int8_t), 0);
-    recv(socket, header_buffer+sizeof(u_int8_t), sizeof(u_int8_t), 0);
-    recv(socket, header_buffer+sizeof(u_int8_t)*2, sizeof(u_int8_t), 0);
-    recv(socket, header_buffer+sizeof(u_int8_t)*3, sizeof(u_int16_t), 0);
-    char *payload = malloc((header_buffer[3] << 8) | header_buffer[4]);
-    recv(socket, payload+sizeof(u_int8_t)*5, (header_buffer[3] << 8) | header_buffer[4], 0);
-    return create_payload(header_buffer[0], header_buffer[1], header_buffer[2], (header_buffer[3] << 8) | header_buffer[4],payload);
+    char header_buffer[sizeof(struct packet)- sizeof(char *)];
+    unsigned long bytes_received = 0;
+    while(bytes_received < sizeof(header_buffer))
+    {
+        ssize_t result = recv(socket, header_buffer + bytes_received, sizeof(header_buffer) - bytes_received, 0);
+        if (result <= 0) {
+            // Handle error or closure and possibly return
+            return NULL;
+        }
+        bytes_received += result;
+    }
+    bytes_received = 0;
+    uint16_t payload_size = (header_buffer[3] << 8) | header_buffer[4];
+    char *payload = malloc(payload_size);
+    if (payload == NULL) {
+        // Handle error: malloc failed
+        return NULL;
+    }
+    while (bytes_received < payload_size)
+    {
+        ssize_t result = recv(socket, payload, payload_size-bytes_received, 0);
+        if (result <= 0) {
+            return NULL;
+        }
+        bytes_received += result;
+    }
+    return create_packet(header_buffer[0], header_buffer[1], payload_size,payload);
 }
-    
