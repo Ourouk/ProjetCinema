@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Server",
+            "type": "shell",
+            "command": "make", // Command to build the server using Makefile
+            "args": [
+                "build/server" // Arguments to specify building the server
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Build Client",
+            "type": "shell",
+            "command": "make", // Command to build the client using Makefile
+            "args": [
+                "build/client" // Arguments to specify building the client
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

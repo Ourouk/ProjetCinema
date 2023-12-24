@@ -8,30 +8,31 @@
 #include <sys/socket.h>
 
 #define MAX_PAYLOAD_SIZE 2048
-
+struct Parameter {
+    char* data; // This will hold the pointer
+    struct Parameter* next;
+};
 // Struct declarations
 struct packet {
     uint8_t type;
     uint8_t Status;
-    uint16_t payload_size;
-    char* payload;
+    size_t payload_size;
+    struct Parameter * payload;
 };
+
+//
+struct Parameter* createParameter( void* data);
+void appendParameter(struct Parameter* payload, void* data);
 
 // Simple chained list containing item needed to be sent.
-struct Parameter {
-    void* data; // This will hold the pointer
-    struct Parameter* next;
-};
-
 //Function Declarations
-//These manage the payload struct
+//These manage the packet struct
 void destroy_packet(struct packet *);
-char *serialize_packet(const struct packet *);
 struct packet *deserialize_payload(const char *);
 
 //These wrapper functions send and receive the payload struct
 //-1 for error 0 for success
-int send_packet(int,const struct packet *);
+int send_packet(int,struct packet *);
 struct packet * recv_packet(int);
 
 #endif // PROTOCOL_LIB_H
