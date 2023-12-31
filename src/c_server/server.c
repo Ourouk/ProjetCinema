@@ -20,8 +20,9 @@ int open_database(const char* path);
 void init_table(sqlite3 *db);
 // Define the servers commands handlers
 void handle_get_movie_list(int);
-void handle_get_available_seats(int,struct packet*);
-void handle_auth_admin(int,struct packet*);
+void handle_get_shows(int,struct packet*);
+void handle_login(int,struct packet*);
+void handle_logout(int);
 void handle_reserve_seats(int,struct packet*);
 void handle_add_movie(int,struct packet*);
 void handle_add_show(int,struct packet*);
@@ -33,7 +34,7 @@ pthread_key_t thread_specific_db;
 void cleanup(void *value) {
     // Cleanup function called when the thread exits
     printf("Cleaning up thread-specific data\n");
-    // Perform any necessary cleanup for the specific data
+    // Perform ,struct packet* payload_buffany necessary cleanup for the specific data
     sqlite3_close(value); // For example, free allocated memory
 }
 void initialize_thread_specific_data() {
@@ -103,8 +104,7 @@ void *handle_client(void *arg) {
     init_table(db);
     while(connected)
     {
-        // Wait to receive the message
-        struct packet* payload_buff = recv_packet(client_socket);
+        struct packet*  payload_buff = recv_packet(client_socket);
         //Handle Command
         if(payload_buff == NULL)
         {
@@ -116,25 +116,31 @@ void *handle_client(void *arg) {
             case 0x01: // Get movie list
                 handle_get_movie_list(client_socket);
                 break;
-            case 0x02: // Get available seats for a show
-                //handle_get_available_seats(client_socket,payload_buff);
+            case 0x02: // Get available shows for a Movie
+                handle_get_shows(client_socket,payload_buff);
                 break;
-            case 0x03: // Auth to admin mode
-                //handle_auth_admin(client_socket,payload_buff);
+            case 0x03: // Reserve x seats for a movie
+                handle_reserve_seats(client_socket,payload_buff);
                 break;
-            case 0x04: // Reserve x seats for a movie
-                //handle_reserve_seats(client_socket,payload_buff);
+            case 0x04: //Add a Movie
+                handle_add_movie(client_socket,payload_buff);
                 break;
-            case 0x05: // Add a movie
-                //handle_add_movie(client_socket,payload_buff);
+            case 0x05: //Add a Show
+                handle_add_show(client_socket,payload_buff);
                 break;
-            case 0x06: // Add a movie max number of seat
-                //handle_add_show(client_socket,payload_buff);
+            case 0x06: //Login
+                handle_login(client_socket,payload_buff);
+                break;
+            case 0x7:  //Logout
+                handle_logout(client_socket);
                 break;
             default:
                 /* code pour gérer une demande inconnue */
                 break;
         }
+        //Clear mallocs after each command
+        deletePayload(&payload_buff->payload); 
+        free(payload_buff);
     }
     close(client_socket);
     pthread_exit(NULL);
@@ -145,43 +151,103 @@ void handle_get_movie_list(int client_socket) {
     int rc;
     sqlite3 * db = pthread_getspecific(thread_specific_db);
     sqlite3_stmt *stmt;
-    const char *sql = "SELECT title, genre, director,release_date FROM Movies;";
+    const char *sql = "SELECT movie_id, title FROM Movies;";
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
         return;
     }
     size_t counter = 0;
-    struct Parameter* parameter_buff;
+    struct Parameter* parameter_buff = NULL;
+    int column_count = sqlite3_column_count(stmt);
+    u_int8_t first_run_flag = 1;
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        if(counter == 0)
+
+        for (int i = 0; i < column_count; i++)
         {
-            const  char* column_text = (const char*)sqlite3_column_text(stmt, 0);
-            char* new_pointer = malloc(strlen(column_text) + 1);
-            if (new_pointer != NULL) {
-                strcpy(new_pointer, column_text);
-               parameter_buff = createParameter(new_pointer);
+            if(first_run_flag){
+                parameter_buff = createParameter((char*)sqlite3_column_text(stmt, i));
+                first_run_flag = 0;
             }
-            
-        }else
-        {
-            const char* column_text = (const char*)sqlite3_column_text(stmt, 0);
-            char* new_pointer = malloc(strlen(column_text) + 1);
-            if (new_pointer != NULL) {
-                strcpy(new_pointer, column_text);
-                appendParameter(parameter_buff, new_pointer);
+            else{
+                const unsigned char * val = sqlite3_column_text(stmt, i);
+                appendParameter(parameter_buff,val);
             }
         }
-        counter++;
     }
     struct packet* packet_buff = malloc(sizeof(struct packet));
     packet_buff->type = 0x81;
     packet_buff->Status = 0x01;
     packet_buff->payload = parameter_buff;
     send_packet(client_socket,packet_buff);
-    destroy_packet(packet_buff);
+    deletePayload(&packet_buff->payload);
+    free(packet_buff);
 }
+void handle_get_shows(int client_socket,struct packet* payload_buff) {
+    int rc;
+    sqlite3 * db = pthread_getspecific(thread_specific_db);
+    sqlite3_stmt *stmt;
+    payload_buff->payload->data[5];
+    char *sql = malloc(sizeof("SELECT show_id, nbr_seats, start_time, end_time, show_date FROM Shows WHERE movie_id = cccc;"));
+    if(sql == NULL)
+    {
+        printf("An error occurred. Exiting...\n");
+        exit(EXIT_FAILURE);
+    }
+    sscanf(sql,"SELECT show_id, nbr_seats, start_time, end_time, show_date FROM Shows WHERE movie_id = %4s;",payload_buff->payload->data); 
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
+        return;
+    }
+    sqlite3_bind_int(stmt, 1, atoi(payload_buff->payload->data));
+    size_t counter = 0;
+    struct Parameter* parameter_buff = NULL;
+    int column_count = sqlite3_column_count(stmt);
+    u_int8_t first_run_flag = 1;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 
+        for (int i = 0; i < column_count; i++)
+        {
+            if(first_run_flag){
+                parameter_buff = createParameter((char*)sqlite3_column_text(stmt, i));
+                first_run_flag = 0;
+            }
+            else{
+                const unsigned char * val = sqlite3_column_text(stmt, i);
+                appendParameter(parameter_buff,val);
+            }
+        }
+    }
+    free(sql);
+    struct packet* packet_buff = malloc(sizeof(struct packet));
+    packet_buff->type = 0x82;
+    packet_buff->Status = 0x01;
+    packet_buff->payload = parameter_buff;
+    send_packet(client_socket,packet_buff);
+    deletePayload(&packet_buff->payload);
+    free(packet_buff);
+}
+void handle_login(int client_socket,struct packet* payload_buff)
+{
+
+}
+void handle_logout(int client_socket)
+{
+
+}
+void handle_reserve_seats(int client_socket,struct packet* payload_buff)
+{
+
+}
+void handle_add_movie(int client_socket,struct packet* payload_buff)
+{
+
+}
+void handle_add_show(int client_socket,struct packet* payload_buff)
+{
+
+}
 //Database Management
 //Database pre-made tools
 int open_database(const char* path){

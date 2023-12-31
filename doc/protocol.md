@@ -34,16 +34,17 @@
   Request codes:
   
   - 0x01: Get movie list
-  - 0x02: Get available seats for a show
-  - 0x03: Auth to admin mode to gain access to all others reaquest
-  - 0x04: Reserve x seats for a movie
-  - 0x05: Add a movie
-  - 0x06: Add a movie max number of seat
+  - 0x02: Get available shows for a Movie
+  - 0x03: Reserve x seats for a movie
+  - 0x04: Add a movie
+  - 0x05: Add a show
+  - 0x06: Login
+  - 0x07: Logout
   
   Response codes:
 
   - 0x81: Movie list
-  - 0x82: Available seats for a movie
+  - 0x02: Get available shows for a Movie
   - 0x83: Reservation confirmation
   - 0x84: Authentification | No Payload
   - 0x85: Add a movie | No Payload

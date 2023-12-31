@@ -21,8 +21,8 @@ struct packet {
 };
 
 //
-struct Parameter* createParameter( void* data);
-void appendParameter(struct Parameter* payload, void* data);
+struct Parameter* createParameter( char* data);
+void appendParameter(struct Parameter* payload, char* data);
 
 // Simple chained list containing item needed to be sent.
 //Function Declarations
