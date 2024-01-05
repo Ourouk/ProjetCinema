@@ -13,6 +13,7 @@
 //Import the database library
 #include "sqlite-amalgamation/sqlite3.h"
 
+#define SQLITE3_MAX_LENGTH 1000
 //Define server handling of each client
 void *handle_client(void *) ;
 //Database pre-made tools
@@ -194,7 +195,7 @@ void handle_get_shows(int client_socket,struct packet* payload_buff) {
         printf("An error occurred. Exiting...\n");
         exit(EXIT_FAILURE);
     }
-    sscanf(sql,"SELECT show_id, nbr_seats, start_time, end_time, show_date FROM Shows WHERE movie_id = %4s;",payload_buff->payload->data); 
+    sprintf(sql,"SELECT show_id, nbr_seats, start_time, end_time, show_date FROM Shows WHERE movie_id = %4s;",payload_buff->payload->data); 
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
@@ -238,15 +239,69 @@ void handle_logout(int client_socket)
 }
 void handle_reserve_seats(int client_socket,struct packet* payload_buff)
 {
-
+    int rc;
+    sqlite3 * db = pthread_getspecific(thread_specific_db);
+    sqlite3_stmt *stmt;
+    //INSERT INTO Movies (title, genre, director, release_date)VALUES ('Inception', 'Science Fiction', 'Christopher Nolan', '2010-07-16')
+    char sql[SQLITE3_MAX_LENGTH];
+    //It's horrible
+    sprintf(sql,"UPDATE SHOWS SET nbr_seats = nbr_seats - 1 WHERE show_id = %s;",payload_buff->payload->data);
+    rc =  sqlite3_prepare_v2(db,sql, -1, &stmt, NULL);
+    struct packet* packet_buff = malloc(sizeof(struct packet));
+    packet_buff->type = 0x86;
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
+        packet_buff->Status = 0x00;
+    }else{
+        packet_buff->Status = 0x01;
+    }
+    send_packet(client_socket,packet_buff);
+    deletePayload(&packet_buff->payload);
+    free(packet_buff);
 }
 void handle_add_movie(int client_socket,struct packet* payload_buff)
 {
-
+    int rc;
+    sqlite3 * db = pthread_getspecific(thread_specific_db);
+    sqlite3_stmt *stmt;
+    //INSERT INTO Movies (title, genre, director, release_date)VALUES ('Inception', 'Science Fiction', 'Christopher Nolan', '2010-07-16')
+    char sql[SQLITE3_MAX_LENGTH];
+    //It's horrible
+    sprintf(sql,"INSERT INTO Movies (title, genre, director, release_date)VALUES ('%s', '%s', '%s', '%s');",payload_buff->payload->data,payload_buff->payload->next->data,payload_buff->payload->next->next->data,payload_buff->payload->next->next->next->data);
+    rc =  sqlite3_prepare_v2(db,sql, -1, &stmt, NULL);
+    struct packet* packet_buff = malloc(sizeof(struct packet));
+    packet_buff->type = 0x85;
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
+        packet_buff->Status = 0x00;
+    }else{
+        packet_buff->Status = 0x01;
+    }
+    send_packet(client_socket,packet_buff);
+    deletePayload(&packet_buff->payload);
+    free(packet_buff);
 }
 void handle_add_show(int client_socket,struct packet* payload_buff)
 {
-
+    int rc;
+    sqlite3 * db = pthread_getspecific(thread_specific_db);
+    sqlite3_stmt *stmt;
+    //INSERT INTO Shows (movie_id, nbr_seats, start_time, end_time, show_date) VALUES (1, 100, '18:00', '21:00', '2024-01-05'),
+    char sql[SQLITE3_MAX_LENGTH];
+    //It's horrible
+    sprintf(sql,"INSERT INTO Shows (movie_id, nbr_seats, start_time, end_time, show_date) VALUES (%s, %s, '%s', '%s', '%s'),",payload_buff->payload->data,payload_buff->payload->next->data,payload_buff->payload->next->next->data,payload_buff->payload->next->next->next->data,payload_buff->payload->next->next->next->next->data);
+    rc =  sqlite3_prepare_v2(db,sql, -1, &stmt, NULL);
+    struct packet* packet_buff = malloc(sizeof(struct packet));
+    packet_buff->type = 0x87;
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
+        packet_buff->Status = 0x00;
+    }else{
+        packet_buff->Status = 0x01;
+    }
+    send_packet(client_socket,packet_buff);
+    deletePayload(&packet_buff->payload);
+    free(packet_buff);
 }
 //Database Management
 //Database pre-made tools
@@ -266,7 +321,7 @@ int open_database(const char* path){
 //Database pre-made tools
 void init_table(sqlite3 *db) {
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS Movies (movie_id INT PRIMARY KEY,title VARCHAR(255),genre VARCHAR(100),director VARCHAR(100),release_date DATE);", -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS Movies (movie_id INT PRIMARY KEY AUTOINCREMENT,title VARCHAR(255),genre VARCHAR(100),director VARCHAR(100),release_date DATE);", -1, &stmt, NULL) != SQLITE_OK) {
         fprintf(stderr, "Already exist\n");
     } else {
         if (sqlite3_step(stmt) != SQLITE_DONE) {
@@ -277,7 +332,7 @@ void init_table(sqlite3 *db) {
     }
     sqlite3_finalize(stmt); // finalize the statement here
 
-    if (sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS Shows (show_id INT PRIMARY KEY,movie_id INT,nbr_seats INT,start_time TIME,end_time TIME,show_date DATE,FOREIGN KEY (movie_id) REFERENCES Movies(movie_id));", -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS Shows (show_id INT PRIMARY KEY AUTOINCREMENT,movie_id INT,nbr_seats INT,start_time TIME,end_time TIME,show_date DATE,FOREIGN KEY (movie_id) REFERENCES Movies(movie_id));", -1, &stmt, NULL) != SQLITE_OK) {
         fprintf(stderr, "Already exist\n");
     } else {
         if (sqlite3_step(stmt) != SQLITE_DONE) {
