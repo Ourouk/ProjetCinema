@@ -12,6 +12,7 @@
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
+#define SQLITE_MAX_SIZE 99
 
 int CreateSocket();
 void handle_get_movie_list(int socket);
@@ -67,8 +68,8 @@ int main(int argc,char* argv[]) {
             case 3 : if(connected&&logged)handle_reserve_seats(sock);else printf("Please connect"); break;
             case 4 : if(connected&&logged)handle_add_movie(sock);else printf("Please connect"); break;
             case 5 : if(connected&&logged)handle_add_show(sock);else printf("Please connect"); break;
-            case 6 : if(connected)handle_login(sock);else printf("Please connect"); break;
-            case 7 : if(connected)handle_logout(sock);else printf("Please connect"); break;
+            case 6 : if(connected)logged = handle_login(sock);else printf("Please connect"); break;
+            case 7 : if(connected)logged = handle_logout(sock);else printf("Please connect"); break;
             case 8 : if(client_fd = Connect(sock)) connected = 1; else connected = 0; break;
             case 9 : if(Disconnect(client_fd)) connected = 0; else connected = 1; break;
             default : fini = 1 ; break;
@@ -86,8 +87,8 @@ void handle_get_movie_list(int socket){
     //Wait to recv the packet
     packet =  recv_packet(socket);
     struct Parameter * current = packet->payload;
-    int count = 0;
-    while (current->next != NULL)
+    int count = 0;uint8_t last = 0;
+    while (current->next != NULL || last == 1)
     {
         printf("%s",current->data);
         if(count%2 == 0)
@@ -96,6 +97,10 @@ void handle_get_movie_list(int socket){
             printf("\n");
         current = current->next;
         count++;
+        if(last == 1)
+            break;
+        if(current->next == NULL)
+            last = 1;
     }
     deletePayload(&packet->payload);
     free(packet);
@@ -114,19 +119,22 @@ void handle_get_shows(int socket) {
     //Wait to recv the packet
     packet =  recv_packet(socket);
     struct Parameter * current = packet->payload;
-    int count = 0;
     if(current != NULL)
     {
-        while (current->next != NULL)
+        int count = 0;uint8_t last = 0;
+        while (current->next != NULL || last == 1)
         {
             printf("%s",current->data);
-            if(count%5 == 0)
+            if(count%5 == 0 && count != 0)
                 printf("\n");
-            else
+            else 
                 printf(",");
-                
             current = current->next;
             count++;
+            if(last == 1)
+                break;
+            if(current->next == NULL)
+                last = 1;
         }
         deletePayload(&packet->payload);
     }else
@@ -137,11 +145,159 @@ void handle_get_shows(int socket) {
 }
 
 void handle_add_movie(int socket) {
-    // TODO: Implement the logic for adding a movie
+    char title[SQLITE_MAX_SIZE];
+    char genre[SQLITE_MAX_SIZE];
+    char director[SQLITE_MAX_SIZE];
+    char release_date[SQLITE_MAX_SIZE];
+    char entry_ok = 0;
+    while(entry_ok == 0)
+    {
+        printf("Enter movie title: ");
+        fgets(title, SQLITE_MAX_SIZE, stdin);fflush(stdin);
+
+        printf("\nEnter movie genre: ");
+        fgets(genre, SQLITE_MAX_SIZE, stdin);fflush(stdin);
+
+        printf("\nEnter movie director: ");
+        fgets(director, SQLITE_MAX_SIZE, stdin);fflush(stdin);
+
+        printf("\nEnter movie release date (YYYY-MM-DD): ");
+        fgets(release_date, SQLITE_MAX_SIZE, stdin);fflush(stdin);
+
+        
+        printf("\n\n=== Entered Information ===\n");
+        printf("Title: %s\n", title);
+        printf("Genre: %s\n", genre);
+        printf("Director: %s\n", director);
+        printf("Release Date: %s\n", release_date);
+
+        int confirm_ok = 0;
+        int entry_ok;
+
+        while (confirm_ok == 0) {
+            printf("Is this information correct? (y/n): ");
+            entry_ok = getchar();
+
+            // Consume extra characters in input buffer until newline
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+
+            if (entry_ok == 'y' || entry_ok == 'Y') {
+                confirm_ok = 1;
+                entry_ok = 1;
+            } else if (entry_ok == 'n' || entry_ok == 'N') {
+                confirm_ok = 1;
+                entry_ok = 0;
+            } else {
+                printf("Invalid input. Please try again.\n");
+                confirm_ok = 0;
+            }
+        }
+    }
+    struct packet * packet = malloc(sizeof(struct packet));
+    packet->type = 0x04;
+    packet->Status = 0x01;
+    packet->payload = createParameter(title);
+    appendParameter(packet->payload,genre);
+    appendParameter(packet->payload,director);
+    appendParameter(packet->payload,release_date);
+    send_packet(socket,packet);
+    deletePayload(&packet->payload);
+    free(packet);
+    packet = recv_packet(socket);
+    if(packet->Status == 0x01)
+    {
+        printf("Show added successfully\n");
+    }
+    else
+    {
+        printf("Error adding show\n");
+    }
+    deletePayload(&packet->payload);
+    free(packet);
+
 }
 
 void handle_add_show(int socket) {
-    // TODO: Implement the logic for adding a show
+    char movie_id[SQLITE_MAX_SIZE];
+    char nbr_seats[SQLITE_MAX_SIZE];
+    char start_time[SQLITE_MAX_SIZE];
+    char end_time[SQLITE_MAX_SIZE];
+    char show_date[SQLITE_MAX_SIZE];
+    uint8_t entry_ok = 0;
+    while(entry_ok == 0)
+    {
+        printf("\nEnter movie ID: ");
+        scanf("%d", movie_id);
+        fflush(stdin);
+
+        printf("\nEnter number of seats: ");
+        scanf("%d", nbr_seats);
+        fflush(stdin);
+
+        printf("\nEnter start time (HH:MM): ");
+        fgets(start_time, SQLITE_MAX_SIZE, stdin);
+        fflush(stdin);
+
+        printf("\nEnter end time (HH:MM): ");
+        fgets(end_time, SQLITE_MAX_SIZE, stdin);
+        fflush(stdin);
+
+        printf("\nEnter show date (YYYY-MM-DD): ");
+        fgets(show_date, SQLITE_MAX_SIZE, stdin);
+        fflush(stdin);
+
+        // Displaying entered show information
+        printf("\n\n=== Entered Show Information ===\n");
+        printf("Movie ID: %d\n", movie_id);
+        printf("Number of Seats: %d\n", nbr_seats);
+        printf("Start Time: %s\n", start_time);
+        printf("End Time: %s\n", end_time);
+        printf("Show Date: %s\n", show_date);
+
+        uint8_t confirm_ok = 0;
+        while (confirm_ok == 0) {
+            printf("Is this information correct? (y/n): ");
+            entry_ok = getchar();
+
+            // Consume extra characters in input buffer until newline
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+
+            if (entry_ok == 'y' || entry_ok == 'Y') {
+                confirm_ok = 1;
+                entry_ok = 1;
+            } else if (entry_ok == 'n' || entry_ok == 'N') {
+                confirm_ok = 1;
+                entry_ok = 0;
+            } else {
+                printf("Invalid input. Please try again.\n");
+                confirm_ok = 0;
+            }
+        }
+    }
+    struct packet * packet = malloc(sizeof(struct packet));
+    packet->type = 0x05;
+    packet->Status = 0x01;
+    packet->payload = createParameter(movie_id);
+    appendParameter(packet->payload,nbr_seats);
+    appendParameter(packet->payload,start_time);
+    appendParameter(packet->payload,end_time);
+    appendParameter(packet->payload,show_date);
+    send_packet(socket,packet);
+    deletePayload(&packet->payload);
+    free(packet);
+    packet = recv_packet(socket);
+    if(packet->Status == 0x01)
+    {
+        printf("Show added successfully\n");
+    }
+    else
+    {
+        printf("Error adding show\n");
+    }
+    deletePayload(&packet->payload);
+    free(packet);
 }
 
 void handle_reserve_seats(int socket) {
