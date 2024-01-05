@@ -49,8 +49,9 @@
   - 0x84: Authentification | No Payload
   - 0x85: Add a movie | No Payload
   - 0x86: Add a movie max number of seat | No Payload
-  - 0x87: General Error
-  - 0x88: Auth login received
+  - 0x87: Add a Show
+  - 0x88: General Error
+  - 0x89: Auth login received
   
   Status codes:
   
