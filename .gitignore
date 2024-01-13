@@ -1,6 +1,6 @@
 data
 .idea
-build
+target
 logs
 ssl
 target
