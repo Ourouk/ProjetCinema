@@ -28,6 +28,7 @@ void appendParameter(struct Parameter* payload, char* data);
 //Function Declarations
 //These manage the packet struct
 void destroy_packet(struct packet *);
+void deletePayload(struct Parameter**);
 struct packet *deserialize_payload(const char *);
 
 //These wrapper functions send and receive the payload struct
