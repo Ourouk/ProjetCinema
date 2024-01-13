@@ -1,7 +1,7 @@
 //C Include to make network work
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h> 
+#include <string.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -88,24 +88,29 @@ void handle_get_movie_list(int socket){
     packet =  recv_packet(socket);
     struct Parameter * current = packet->payload;
     int count = 0;uint8_t last = 0;
-    while (current->next != NULL || last == 1)
+    if(current == NULL)
     {
-        printf("%s",current->data);
-        if(count%2 == 0)
-            printf(",");
-        else
-            printf("\n");
-        current = current->next;
-        count++;
-        if(last == 1)
-            break;
-        if(current->next == NULL)
-            last = 1;
+        printf("No movie available\n");
+        return;
+    }else{
+        while (current->next != NULL || last == 1)
+        {
+            printf("%s",current->data);
+            if(count%2 == 0)
+                printf(",");
+            else
+                printf("\n");
+            current = current->next;
+            count++;
+            if(last == 1)
+                break;
+            if(current->next == NULL)
+                last = 1;
+        }
     }
     deletePayload(&packet->payload);
     free(packet);
 }
-
 void handle_get_shows(int socket) {
     printf("Please enter the movie id :");
     char * movie_id = malloc(5*sizeof(char));
@@ -127,7 +132,7 @@ void handle_get_shows(int socket) {
             printf("%s",current->data);
             if(count%5 == 0 && count != 0)
                 printf("\n");
-            else 
+            else
                 printf(",");
             current = current->next;
             count++;
@@ -143,7 +148,6 @@ void handle_get_shows(int socket) {
     }
     free(packet);
 }
-
 void handle_add_movie(int socket) {
     char title[SQLITE_MAX_SIZE];
     char genre[SQLITE_MAX_SIZE];
@@ -164,7 +168,6 @@ void handle_add_movie(int socket) {
         printf("\nEnter movie release date (YYYY-MM-DD): ");
         fgets(release_date, SQLITE_MAX_SIZE, stdin);fflush(stdin);
 
-        
         printf("\n\n=== Entered Information ===\n");
         printf("Title: %s\n", title);
         printf("Genre: %s\n", genre);
@@ -177,11 +180,9 @@ void handle_add_movie(int socket) {
         while (confirm_ok == 0) {
             printf("Is this information correct? (y/n): ");
             entry_ok = getchar();
-
             // Consume extra characters in input buffer until newline
             int c;
             while ((c = getchar()) != '\n' && c != EOF);
-
             if (entry_ok == 'y' || entry_ok == 'Y') {
                 confirm_ok = 1;
                 entry_ok = 1;
@@ -228,42 +229,34 @@ void handle_add_show(int socket) {
     while(entry_ok == 0)
     {
         printf("\nEnter movie ID: ");
-        scanf("%d", movie_id);
+        fgets(movie_id, SQLITE_MAX_SIZE, stdin);
         fflush(stdin);
-
         printf("\nEnter number of seats: ");
-        scanf("%d", nbr_seats);
+        fgets(nbr_seats, SQLITE_MAX_SIZE, stdin);
         fflush(stdin);
-
         printf("\nEnter start time (HH:MM): ");
         fgets(start_time, SQLITE_MAX_SIZE, stdin);
         fflush(stdin);
-
         printf("\nEnter end time (HH:MM): ");
         fgets(end_time, SQLITE_MAX_SIZE, stdin);
         fflush(stdin);
-
         printf("\nEnter show date (YYYY-MM-DD): ");
         fgets(show_date, SQLITE_MAX_SIZE, stdin);
         fflush(stdin);
-
         // Displaying entered show information
         printf("\n\n=== Entered Show Information ===\n");
-        printf("Movie ID: %d\n", movie_id);
-        printf("Number of Seats: %d\n", nbr_seats);
+        printf("Movie ID: %s\n", movie_id);
+        printf("Number of Seats: %s\n", nbr_seats);
         printf("Start Time: %s\n", start_time);
         printf("End Time: %s\n", end_time);
         printf("Show Date: %s\n", show_date);
-
         uint8_t confirm_ok = 0;
         while (confirm_ok == 0) {
             printf("Is this information correct? (y/n): ");
             entry_ok = getchar();
-
             // Consume extra characters in input buffer until newline
             int c;
             while ((c = getchar()) != '\n' && c != EOF);
-
             if (entry_ok == 'y' || entry_ok == 'Y') {
                 confirm_ok = 1;
                 entry_ok = 1;
@@ -302,12 +295,105 @@ void handle_add_show(int socket) {
 
 void handle_reserve_seats(int socket) {
     // TODO: Implement the logic for reserving seats
+    char show_id[SQLITE_MAX_SIZE];
+    char nbr_seats[SQLITE_MAX_SIZE];
+    uint8_t entry_ok = 0;
+    while(entry_ok == 0)
+    {
+        printf("\nEnter show ID: ");
+        scanf("%6s", show_id);
+        fflush(stdin);
+
+        printf("\nEnter number of seats: ");
+        scanf("%6s", nbr_seats);
+        fflush(stdin);
+
+        // Displaying entered show information
+        printf("\n\n=== Entered Reservation Information ===\n");
+        printf("Show ID: %s\n", show_id);
+        printf("Number of Seats: %s\n", nbr_seats);
+
+        uint8_t confirm_ok = 0;
+        while (confirm_ok == 0) {
+            printf("Is this information correct? (y/n): ");
+            entry_ok = getchar();
+
+            // Consume extra characters in input buffer until newline
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+
+            if (entry_ok == 'y' || entry_ok == 'Y') {
+                confirm_ok = 1;
+                entry_ok = 1;
+            } else if (entry_ok == 'n' || entry_ok == 'N') {
+                confirm_ok = 1;
+                entry_ok = 0;
+            } else {
+                printf("Invalid input. Please try again.\n");
+                confirm_ok = 0;
+            }
+        }
+    }
+    struct packet * packet = malloc(sizeof(struct packet));
+    packet->type = 0x03;
+    packet->Status = 0x01;
+    packet->payload = createParameter(show_id);
+    appendParameter(packet->payload,nbr_seats);
+    send_packet(socket,packet);
+    deletePayload(&packet->payload);
+    free(packet);
 }
 
 u_int8_t handle_login(int socket) {
-    return 1;
+    char username[26];
+    char password[26];
+    printf("---------------------------------------------------------------------------\n");
+    printf("-------Login Wizard--------------------------------------------------------\n");
+    printf("---------------------------------------------------------------------------\n\n");
+    printf("Please Enter your username (max 25 char): ");
+    scanf("%25s", username);fflush(stdin); //fix overflow
+    printf("\nPlease Enter your password (max 25 char): ");
+    scanf("%25s", password);fflush(stdin); //fix overflow
+    struct packet * packet = malloc(sizeof(struct packet)); //Not using malloc because we don't need to keep it
+    packet->type = 0x06;
+    packet->Status = 0x01;
+    packet->payload = createParameter(username);
+    appendParameter(packet->payload,password);
+    send_packet(socket,packet);
+    deletePayload(&packet->payload);
+    //Wait to recv the packet
+    packet =  recv_packet(socket);
+    if(packet->Status == 0x01)
+    {
+        printf("Login successful\n");
+        return 1;
+    }
+    else
+    {
+        printf("Login failed\n");
+        return 0;
+    }
+    free(packet);
 }
 u_int8_t handle_logout(int socket) {
+    struct packet * packet = malloc(sizeof(struct packet)); //Not using malloc because we don't need to keep it
+    packet->type = 0x07;
+    packet->Status = 0x01;
+    packet->payload = NULL;
+    send_packet(socket,packet);
+    deletePayload(&packet->payload);
+    //Wait to recv the packet
+    packet =  recv_packet(socket);
+    if(packet->Status == 0x01)
+    {
+        printf("Logout successful\n");
+        return 1;
+    }
+    else
+    {
+        printf("Logout failed\n");
+        return 0;
+    }
     return 0;
 }
 u_int8_t Connect(int socket) {
@@ -325,7 +411,7 @@ u_int8_t Connect(int socket) {
     scanf("%14s", ip);fflush(stdin); //fix overflow
     printf("\n");
     //Convert IP address to right format
-    if (inet_pton(AF_INET, ip, &sockaddr.sin_addr)<= 0) 
+    if (inet_pton(AF_INET, ip, &sockaddr.sin_addr)<= 0)
     {
         perror("\nInvalid sin_addr/ sin_addr not supported \n");
         exit(EXIT_FAILURE);
@@ -335,7 +421,7 @@ u_int8_t Connect(int socket) {
     sockaddr.sin_family=AF_INET; //IPV4
     port_int = atoi(port);
     sockaddr.sin_port = htons(port_int);
-    if ((  client_fd = connect(socket, (struct sockaddr*)&sockaddr,sizeof(sockaddr))) < 0) 
+    if ((  client_fd = connect(socket, (struct sockaddr*)&sockaddr,sizeof(sockaddr))) < 0)
     {
         perror("Connection failed");
         exit(EXIT_FAILURE);

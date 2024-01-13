@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <pthread.h>
 #include <string.h>
+#include <openssl/sha.h>
 
 //Import the protocol library
 #include "../protocol_lib/protocol_lib.h"
@@ -22,12 +23,57 @@ void init_table(sqlite3 *db);
 // Define the servers commands handlers
 void handle_get_movie_list(int);
 void handle_get_shows(int,struct packet*);
-void handle_login(int,struct packet*);
-void handle_logout(int);
+uint8_t handle_login(int,struct packet*);
+uint8_t handle_logout(int);
 void handle_reserve_seats(int,struct packet*);
 void handle_add_movie(int,struct packet*);
 void handle_add_show(int,struct packet*);
 
+
+void hash_password(const char *password, char *hashed_password) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char*)password, strlen(password), hash);
+    for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+        sprintf(hashed_password + (i * 2), "%02x", hash[i]);
+}
+//Create hashed csv files
+void create_account(const char *username, const char *password) {
+    char hashed_password[65];
+    hash_password(password, hashed_password);
+    FILE *file = fopen("data/passwords.csv", "r");
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        char *comma = strchr(line, ',');
+        *comma = '\0';
+        if (strcmp(line, username) == 0) {
+            fclose(file);
+            printf("Username already exists.\n");
+            return;
+        }
+    }
+    fclose(file);
+    file = fopen("data/passwords.csv", "a");
+    fprintf(file, "%s,%s\n", username, hashed_password);
+    fclose(file);
+}
+
+int login(const char *username, const char *password) {
+    char hashed_password[65];
+    hash_password(password, hashed_password);
+    FILE *file = fopen("data/passwords.csv", "r");
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        char *comma = strchr(line, ',');
+        char *username_f = strtok(line, ","); // Tokenize string before comma
+        char *password_f = strtok(comma + 1, "\n"); // Tokenize string after comma
+        if (strcmp(username_f, username) == 0 && strcmp(password_f, hashed_password) == 0) {
+            fclose(file);
+            return 1;
+        }
+    }
+    fclose(file);
+    return 0;
+}
 
 //Note the technical choice to choose sqlite3 as a database limit the use of mutex sadly...
 sqlite3 *db;
@@ -49,20 +95,17 @@ int main() {
         perror("socket");
         exit(EXIT_FAILURE);
     }
-
     // Define the server address
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(5050); // Choose a port (in this example, 8080)
     server_addr.sin_addr.s_addr = INADDR_ANY; // Listen on any available interface
-
     // Bind the socket to the specified address
     if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         perror("bind");
         close(sockfd);
         exit(EXIT_FAILURE);
     }
-
     // Listen for incoming connections
     if (listen(sockfd, 10) == -1) { // The second argument is the backlog queue size
         perror("listen");
@@ -103,6 +146,7 @@ void *handle_client(void *arg) {
     //Open the database and configure it if needed
     open_database("data/sqlite.db");
     init_table(db);
+    u_int8_t connected_flag = 1;
     while(connected)
     {
         struct packet*  payload_buff = recv_packet(client_socket);
@@ -112,6 +156,7 @@ void *handle_client(void *arg) {
             printf("An error occurred. Exiting...\n");
             exit(EXIT_FAILURE);
         }
+        u_int8_t general_error_flag = 0;
         switch (payload_buff->type)
         {
             case 0x01: // Get movie list
@@ -121,26 +166,48 @@ void *handle_client(void *arg) {
                 handle_get_shows(client_socket,payload_buff);
                 break;
             case 0x03: // Reserve x seats for a movie
-                handle_reserve_seats(client_socket,payload_buff);
+                if(connected_flag)
+                    handle_reserve_seats(client_socket,payload_buff);
+                else
+                    general_error_flag = 1;
                 break;
             case 0x04: //Add a Movie
-                handle_add_movie(client_socket,payload_buff);
+                if(connected_flag)
+                    handle_add_movie(client_socket,payload_buff);
+                else
+                    general_error_flag = 1;
                 break;
             case 0x05: //Add a Show
-                handle_add_show(client_socket,payload_buff);
+                if(connected_flag)
+                    handle_add_show(client_socket,payload_buff);
+                else
+                    general_error_flag = 1;
                 break;
             case 0x06: //Login
-                handle_login(client_socket,payload_buff);
+                    connected_flag = handle_login(client_socket,payload_buff);
                 break;
             case 0x7:  //Logout
-                handle_logout(client_socket);
+                if(connected_flag)
+                    connected_flag = handle_logout(client_socket);
+                else
+                    general_error_flag = 1;
                 break;
             default:
                 /* code pour gérer une demande inconnue */
+                general_error_flag = 1;
                 break;
         }
+        if(general_error_flag)
+        {
+            struct packet* packet_buff = malloc(sizeof(struct packet));
+            packet_buff->type = 0x88;
+            packet_buff->Status = 0x00;
+            packet_buff->payload = NULL;
+            send_packet(client_socket,packet_buff);
+            free(packet_buff);
+        }
         //Clear mallocs after each command
-        deletePayload(&payload_buff->payload); 
+        deletePayload(&payload_buff->payload);
         free(payload_buff);
     }
     close(client_socket);
@@ -163,7 +230,6 @@ void handle_get_movie_list(int client_socket) {
     int column_count = sqlite3_column_count(stmt);
     u_int8_t first_run_flag = 1;
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-
         for (int i = 0; i < column_count; i++)
         {
             if(first_run_flag){
@@ -229,13 +295,38 @@ void handle_get_shows(int client_socket,struct packet* payload_buff) {
     deletePayload(&packet_buff->payload);
     free(packet_buff);
 }
-void handle_login(int client_socket,struct packet* payload_buff)
+uint8_t handle_login(int client_socket,struct packet* payload_buff)
 {
-
+    char * username = payload_buff->payload->data;
+    char * password = payload_buff->payload->next->data;
+    if(login(username, password))
+    {
+        struct packet* packet_buff = malloc(sizeof(struct packet));
+        packet_buff->type = 0x83;
+        packet_buff->Status = 0x01;
+        packet_buff->payload = NULL;
+        send_packet(client_socket,packet_buff);
+        return 1;
+    }
+    else
+    {
+        struct packet* packet_buff = malloc(sizeof(struct packet));
+        packet_buff->type = 0x83;
+        packet_buff->Status = 0x00;
+        packet_buff->payload = NULL;
+        send_packet(client_socket,packet_buff);
+        return 0;
+    }
 }
-void handle_logout(int client_socket)
+uint8_t handle_logout(int client_socket)
 {
-
+    struct packet* packet_buff  = malloc(sizeof(struct packet));
+    packet_buff->type = 0x84;
+    packet_buff->Status = 0x01;
+    packet_buff->payload = NULL;
+    send_packet(client_socket,packet_buff);
+    free(packet_buff);
+    return 0;
 }
 void handle_reserve_seats(int client_socket,struct packet* payload_buff)
 {
@@ -245,7 +336,7 @@ void handle_reserve_seats(int client_socket,struct packet* payload_buff)
     //INSERT INTO Movies (title, genre, director, release_date)VALUES ('Inception', 'Science Fiction', 'Christopher Nolan', '2010-07-16')
     char sql[SQLITE3_MAX_LENGTH];
     //It's horrible
-    sprintf(sql,"UPDATE SHOWS SET nbr_seats = nbr_seats - 1 WHERE show_id = %s;",payload_buff->payload->data);
+    sprintf(sql,"UPDATE SHOWS SET nbr_seats = nbr_seats - %s WHERE show_id = %s;",payload_buff->payload->next->data,payload_buff->payload->data);
     rc =  sqlite3_prepare_v2(db,sql, -1, &stmt, NULL);
     struct packet* packet_buff = malloc(sizeof(struct packet));
     packet_buff->type = 0x86;
@@ -322,21 +413,20 @@ int open_database(const char* path){
 void init_table(sqlite3 *db) {
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS Movies (movie_id INT PRIMARY KEY AUTOINCREMENT,title VARCHAR(255),genre VARCHAR(100),director VARCHAR(100),release_date DATE);", -1, &stmt, NULL) != SQLITE_OK) {
-        fprintf(stderr, "Already exist\n");
+        fprintf(stdout, "Already exist\n");
     } else {
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            fprintf(stderr, "Table creation failed: %s\n", sqlite3_errmsg(db));
+            fprintf(stdout, "Table creation failed: %s\n", sqlite3_errmsg(db));
         } else {
             printf("Table created successfully\n");
         }
     }
     sqlite3_finalize(stmt); // finalize the statement here
-
     if (sqlite3_prepare_v2(db, "CREATE TABLE IF NOT EXISTS Shows (show_id INT PRIMARY KEY AUTOINCREMENT,movie_id INT,nbr_seats INT,start_time TIME,end_time TIME,show_date DATE,FOREIGN KEY (movie_id) REFERENCES Movies(movie_id));", -1, &stmt, NULL) != SQLITE_OK) {
-        fprintf(stderr, "Already exist\n");
+        fprintf(stdout, "Already exist\n");
     } else {
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            fprintf(stderr, "Table creation failed: %s\n", sqlite3_errmsg(db));
+            fprintf(stdout, "Table creation failed: %s\n", sqlite3_errmsg(db));
         } else {
             printf("Table created successfully\n");
         }
