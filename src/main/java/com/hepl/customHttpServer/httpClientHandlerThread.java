@@ -75,7 +75,7 @@
 
                 //Read the whole content
                 StringBuilder sb = new StringBuilder();
-                String inputLine; int emptyline =0;
+                String inputLine;
                 while ((inputLine = input.readLine()) != null) {
                     sb.append(inputLine);
                     sb.append("\r\n");
@@ -98,7 +98,6 @@
                 }
                 if(httpMethod.equals("POST"))
                 {
-                    StringBuilder sb_body = new StringBuilder();
                     try {
                         int numChars = Integer.parseInt(httpHeaders.get("Content-Length"));
                         char[] buff = new char[numChars];

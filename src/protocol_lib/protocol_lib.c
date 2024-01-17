@@ -88,11 +88,23 @@ int send_packet(int socket, struct packet *msg)
     }
     msg->payload_size = string_size;
     // Sending the packet
-    char *packet_buffer = malloc(sizeof(struct packet));
-    memcpy(packet_buffer, msg, sizeof(struct packet));
+    // char *packet_buffer = malloc(sizeof(struct packet));
+    // memcpy(packet_buffer, msg, sizeof(struct packet));
+
+    //Reduce the size of the packet to the header size
+    size_t packetHeader_size = sizeof(u_int8_t)+sizeof(u_int8_t)+sizeof(size_t);
+    void * packet_buffer = malloc(packetHeader_size);
+    if (packet_buffer == NULL) {
+        perror("Error allocating memory for packet");
+        return -1;
+    }
+    memcpy(packet_buffer,&(msg->type), sizeof(u_int8_t));
+    memcpy(packet_buffer + sizeof(u_int8_t),&(msg->Status),  sizeof(u_int8_t));
+    memcpy(packet_buffer + sizeof(u_int8_t) + sizeof(u_int8_t),&(msg->payload_size),sizeof(size_t));
+
     fprintf(stdout, "Packet Header : Type : %x, Status : %d, Payload Size : %zu\n", msg->type, msg->Status, msg->payload_size);
     fflush(stdout);
-    int bytes_sent = send(socket, packet_buffer, sizeof(struct packet) - sizeof(char *), 0);
+    int bytes_sent = send(socket, packet_buffer, packetHeader_size, 0);
     fprintf(stdout, "Bytes sent: %d\n", bytes_sent);
     if (bytes_sent == -1) {
         perror("Error sending header data");
@@ -123,22 +135,34 @@ struct packet *recv_packet(int socket) {
         uint8_t Status;
         size_t payload_size;
     };
-    struct packet_header *header_buffer = malloc(sizeof(struct packet_header));
-    if (header_buffer == NULL) {
+    size_t packetHeader_size = sizeof(u_int8_t)+sizeof(u_int8_t)+sizeof(size_t);
+    void * smallHeader_buffer = malloc(packetHeader_size);
+    // struct packet_header *header_buffer = malloc(sizeof(struct packet_header));
+    if (smallHeader_buffer == NULL) {
         perror("Error allocating memory for header");
         return NULL;
     }
-    memset(header_buffer, 0, sizeof(struct packet_header));
+    // memset(header_buffer, 0, sizeof(struct packet_header));
     unsigned long bytes_received = 0;
-    while (bytes_received < sizeof(struct packet_header)) {
-        ssize_t result = recv(socket, header_buffer + bytes_received, sizeof(struct packet_header) - bytes_received, 0);
+    while (bytes_received < packetHeader_size) {
+        ssize_t result = recv(socket, smallHeader_buffer + bytes_received, packetHeader_size - bytes_received, 0);
         if (result <= 0) {
             perror("Error receiving header data");
-            free(header_buffer);
+            free(smallHeader_buffer);
             return NULL;
         }
         bytes_received += result;
     }
+    struct packet_header * header_buffer = malloc(sizeof(struct packet_header));
+    header_buffer->type = *(uint8_t*)smallHeader_buffer;
+    header_buffer->Status = *(uint8_t*)(smallHeader_buffer + sizeof(u_int8_t));
+    header_buffer->payload_size = *(size_t*)(smallHeader_buffer + sizeof(u_int8_t) + sizeof(u_int8_t));
+    free(smallHeader_buffer);
+    if (header_buffer == NULL) {
+        perror("Error allocating memory for header");
+        return NULL;
+    }
+
     fprintf(stdout, "Packet Header : Type : %x, Status : %d, Payload Size : %zu\n", header_buffer->type, header_buffer->Status, header_buffer->payload_size);
     fprintf(stdout, "Header's bytes received: %lu\n", bytes_received);
     bytes_received = 0;

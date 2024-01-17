@@ -16,7 +16,7 @@ struct Parameter {
 struct packet {
     uint8_t type;
     uint8_t Status;
-    size_t payload_size;
+    unsigned long payload_size;
     struct Parameter * payload;
 };
 

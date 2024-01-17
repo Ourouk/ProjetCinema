@@ -136,9 +136,6 @@ public class httpResponseBuilder {
         this.content = content;
         this.setSize(content.length);
     }
-    
-    
-    
     private String version;
     private int code;
     private String human_readable_code;

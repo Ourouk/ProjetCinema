@@ -13,7 +13,9 @@
 
 //Import the database library
 #include "sqlite-amalgamation/sqlite3.h"
-
+//Define Server Varibles
+#define IP_ADDRESS 0 //Configured to listen on all interfaces
+#define IP_PORT 5050
 #define SQLITE3_MAX_LENGTH 1000
 //Define server handling of each client
 void *handle_client(void *) ;
@@ -29,6 +31,7 @@ void handle_reserve_seats(int,struct packet*);
 void handle_add_movie(int,struct packet*);
 void handle_add_show(int,struct packet*);
 
+pthread_mutex_t password_mutex; // Declare a mutex variable
 
 void hash_password(const char *password, char *hashed_password) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -57,7 +60,10 @@ void create_account(const char *username, const char *password) {
     fclose(file);
 }
 
+
+
 int login(const char *username, const char *password) {
+    pthread_mutex_lock(&password_mutex); // Lock the mutex before accessing the file
     char hashed_password[65];
     hash_password(password, hashed_password);
     FILE *file = fopen("data/passwords.csv", "r");
@@ -68,10 +74,12 @@ int login(const char *username, const char *password) {
         char *password_f = strtok(comma + 1, "\n"); // Tokenize string after comma
         if (strcmp(username_f, username) == 0 && strcmp(password_f, hashed_password) == 0) {
             fclose(file);
+            pthread_mutex_unlock(&password_mutex); // Unlock the mutex after accessing the file
             return 1;
         }
     }
     fclose(file);
+    pthread_mutex_unlock(&password_mutex); // Unlock the mutex after accessing the file
     return 0;
 }
 
@@ -98,7 +106,7 @@ int main() {
     // Define the server address
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(5050); // Choose a port (in this example, 8080)
+    server_addr.sin_port = htons(IP_PORT    ); // Choose a port (in this example, 8080)
     server_addr.sin_addr.s_addr = INADDR_ANY; // Listen on any available interface
     // Bind the socket to the specified address
     if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {

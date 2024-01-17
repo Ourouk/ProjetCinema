@@ -33,12 +33,12 @@ int main(int argc,char* argv[]) {
             perror("Socket failed");
             exit(EXIT_FAILURE);
         }
-    int choix;
+    int choice;
     u_int8_t fini = 0,connected = 0,logged = 0;
     while(!fini)
     {
-        if (argc == 2) { choix = atoi(argv[1]); fini = 1; }
-        else choix;
+        if (argc == 2) { choice = atoi(argv[1]); fini = 1; }
+        else choice;
         {
             printf("\n");
             printf("---------------------------------------------------------------------------\n");
@@ -58,10 +58,10 @@ int main(int argc,char* argv[]) {
             printf(" 9. Disconnect\n");
             printf(" 0. Exit\n");
             printf("  Choix : ");
-            scanf("%d", &choix);fflush(stdin);
+            scanf("%d", &choice);fflush(stdin);
             getchar(); // to consume the newline character left by scanf
         }
-        switch(choix)
+        switch(choice)
         {
             case 1 : if(connected)handle_get_movie_list(sock);else printf("Please connect"); break;
             case 2 : if(connected)handle_get_shows(sock);else printf("Please connect"); break;
@@ -407,7 +407,7 @@ u_int8_t Connect(int socket) {
     printf("---------------------------------------------------------------------------\n");
     printf("-------Connection Wizard---------------------------------------------------\n");
     printf("---------------------------------------------------------------------------\n\n");
-    printf("Please Enter the targetted IP Address (expample 127.0.0.1 ): ");
+    printf("Please Enter the targetted IP Address (example 127.0.0.1 ): ");
     scanf("%14s", ip);fflush(stdin); //fix overflow
     printf("\n");
     //Convert IP address to right format

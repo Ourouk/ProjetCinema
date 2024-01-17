@@ -5,6 +5,7 @@
 package com.hepl.customHttpServer;
 
 import com.hepl.Logger;
+import com.hepl.cServerConnector.cServerActions;
 import com.hepl.customSmtpClient.smtpSender;
 
 import java.io.File;
@@ -18,6 +19,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  *
@@ -81,7 +83,6 @@ public class httpSmartHttpHandler {
         }
     }
 
-    
     public byte[] getFileContent() throws IOException
     {
         if(this.isSmart)
@@ -117,15 +118,17 @@ public class httpSmartHttpHandler {
         new_filecontent = buff.getBytes();
         return new_filecontent;
     }
-    
+
     // All Smart Handler should be added in the two next method and create a new function to add the content.
-    private String[] listOfAvailablesFunctions = new String[]{"<!-- displayFilmShows -->","<!-- Add Here the mail sent -->","Error you have called an unset function"};
-    
+    private String[] listOfAvailablesFunctions = new String[]{"<!-- displayMovieList -->","<!-- displayShowList -->","<!-- Add Here the mail sent -->","Error you have called an unset function"};
+
     private String functionCaller(String s) throws IOException {
         switch(s)
         {
-            case "<!-- displayFilmShows -->":
-                return displayFilmShows();
+            case "<!-- displayMovieList -->":
+                return displayMovieList();
+            case "<!-- displayShowList -->":
+                return displayShowList();
             case "<!-- Add Here the mail sent -->":
                 return mailsent();
             default:
@@ -134,12 +137,57 @@ public class httpSmartHttpHandler {
         }
     }
 
-    private String displayFilmShows(){
-        return "to_implement";
+
+    private String displayMovieList(){
+    cServerActions cServerActions = new cServerActions("localhost", 5050);
+    List<String> listOffMovies;
+    try {
+            listOffMovies = cServerActions.getMoviesList();
+            StringBuilder builder = new StringBuilder();
+            builder.append("<form action=\"/show_selector.shtml\" method=\"post\">\n");
+            for(String s : listOffMovies) {
+                builder.append("<label for=\"").append(s).append("\">\n");
+                builder.append("<input type=\"checkbox\" id=\"").append(s).append("\" name=\"options[]\" value=\"").append(s).append("\">\n");
+                builder.append(s).append("\n");
+                builder.append("</label>\n");
+            }
+            builder.append("<input type=\"submit\" value=\"Submit\">\n");
+            builder.append("</form>\n");
+            String result = builder.toString();
+            return result;
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return "Error while getting the list of movies";
     }
+
+    private String displayShowList() {
+        cServerActions cServerActions = new cServerActions("localhost", 5050);
+        try {
+            List<String> listOffShows = cServerActions.getShowList(httpClientHandlerThread.requestBody);
+            StringBuilder builder = new StringBuilder();
+            builder.append("<form action=\"/thank_you.html\" method=\"post\">\n");
+            for(String s : listOffShows) {
+                builder.append("<label for=\"").append(s).append("\">\n");
+                builder.append("<input type=\"checkbox\" id=\"").append(s).append("\" name=\"options[]\" value=\"").append(s).append("\">\n");
+                builder.append(s).append("\n");
+                builder.append("</label>\n");
+            }
+            builder.append("<input type=\"submit\" value=\"Submit\">\n");
+            builder.append("</form>\n");
+            String result = builder.toString();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return "Error while getting the list of shows";
+    }
+
     private String mailsent() {
         return "to_implement";
     }
+
     private HashMap body_parser(String body)
     {
         HashMap form_hashmap = new HashMap();
