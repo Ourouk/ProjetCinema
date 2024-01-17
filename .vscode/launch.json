@@ -5,7 +5,7 @@
             "name": "Debug Client",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/client", // Path to your client executable
+            "program": "${workspaceFolder}/target/client", // Path to your client executable
             "args": [], // Arguments to pass to your client
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -26,7 +26,7 @@
             "name": "Debug Server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/server", // Path to your server executable
+            "program": "${workspaceFolder}/target/server", // Path to your server executable
             "args": [], // Arguments to pass to your server
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -42,6 +42,17 @@
             ],
             "preLaunchTask": "Build Server", // Replace 'gcc build' with your build task name
             "miDebuggerPath": "/usr/bin/gdb" // Path to your GDB executable
+        },
+        {
+            "name": "Debug Java Server",
+            "type": "java",
+            "request": "launch",
+            "mainClass": "com.hepl.main", // Replace with the fully qualified name of your server's main class
+            "projectName": "Projet_Cinema", // Replace with the name of your server project
+            "args": [], // Arguments to pass to your server
+            "vmArgs": [], // VM arguments for your server
+            "env": {}, // Environment variables for your server
+            "console": "internalConsole"
         }
     ]
 }
