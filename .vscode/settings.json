@@ -1,4 +1,16 @@
 
 {
-    "C_Cpp.dimInactiveRegions": true
+    "C_Cpp.dimInactiveRegions": true,
+    "files.associations": {
+        "socket.h": "c",
+        "protocol_lib.h": "c",
+        "stdio.h": "c"
+    },
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/mnt/c/Users/spelg/Documents/Projets/ProjetCinéma/build",
+            "binaryPath": "/mnt/c/Users/spelg/Documents/Projets/ProjetCinéma/build/client",
+            "binaryArgs": []
+        }
+    ]
 }

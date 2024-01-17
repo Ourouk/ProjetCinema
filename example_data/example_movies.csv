@@ -1,0 +1,11 @@
+movie_id,title,genre,director,release_date
+1,Inception,Science Fiction,Christopher Nolan,2010-07-16
+2,The Shawshank Redemption,Drama,Frank Darabont,1994-09-23
+3,Pulp Fiction,Crime,Quentin Tarantino,1994-10-14
+4,The Dark Knight,Action,Christopher Nolan,2008-07-18
+5,Forrest Gump,Drama,Robert Zemeckis,1994-07-06
+6,The Matrix,Science Fiction,Lana Wachowski,1999-03-31
+7,Interstellar,Science Fiction,Christopher Nolan,2014-11-07
+8,Schindler's List,Drama,Steven Spielberg,1993-12-15
+9,Fight Club,Drama,David Fincher,1999-10-15
+10,The Lord of the Rings: The Return of the King,Fantasy,Peter Jackson,2003-12-17
