@@ -7,12 +7,15 @@
 #include <pthread.h>
 #include <string.h>
 #include <openssl/sha.h>
+#include <errno.h>
 
 //Import the protocol library
 #include "../protocol_lib/protocol_lib.h"
 
 //Import the database library
 #include "sqlite-amalgamation/sqlite3.h"
+#include <sys/select.h>
+
 //Define Server Varibles
 #define IP_ADDRESS 0 //Configured to listen on all interfaces
 #define IP_PORT 5050
@@ -161,58 +164,60 @@ void *handle_client(void *arg) {
         //Handle Command
         if(payload_buff == NULL)
         {
-            printf("An error occurred. Exiting...\n");
-            exit(EXIT_FAILURE);
-        }
-        u_int8_t general_error_flag = 0;
-        switch (payload_buff->type)
+            printf("Client shut down communication or an error occurred. Exiting...\n");
+            break;
+        }else
         {
-            case 0x01: // Get movie list
-                handle_get_movie_list(client_socket);
-                break;
-            case 0x02: // Get available shows for a Movie
-                handle_get_shows(client_socket,payload_buff);
-                break;
-            case 0x03: // Reserve x seats for a movie
-                if(connected_flag)
-                    handle_reserve_seats(client_socket,payload_buff);
-                else
+            u_int8_t general_error_flag = 0;
+            switch (payload_buff->type)
+            {
+                case 0x01: // Get movie list
+                    handle_get_movie_list(client_socket);
+                    break;
+                case 0x02: // Get available shows for a Movie
+                    handle_get_shows(client_socket,payload_buff);
+                    break;
+                case 0x03: // Reserve x seats for a movie
+                    if(connected_flag)
+                        handle_reserve_seats(client_socket,payload_buff);
+                    else
+                        general_error_flag = 1;
+                    break;
+                case 0x04: //Add a Movie
+                    if(connected_flag)
+                        handle_add_movie(client_socket,payload_buff);
+                    else
+                        general_error_flag = 1;
+                    break;
+                case 0x05: //Add a Show
+                    if(connected_flag)
+                        handle_add_show(client_socket,payload_buff);
+                    else
+                        general_error_flag = 1;
+                    break;
+                case 0x06: //Login
+                        connected_flag = handle_login(client_socket,payload_buff);
+                    break;
+                case 0x7:  //Logout
+                    if(connected_flag)
+                        connected_flag = handle_logout(client_socket);
+                    else
+                        general_error_flag = 1;
+                    break;
+                default:
+                    /* code pour gérer une demande inconnue */
                     general_error_flag = 1;
-                break;
-            case 0x04: //Add a Movie
-                if(connected_flag)
-                    handle_add_movie(client_socket,payload_buff);
-                else
-                    general_error_flag = 1;
-                break;
-            case 0x05: //Add a Show
-                if(connected_flag)
-                    handle_add_show(client_socket,payload_buff);
-                else
-                    general_error_flag = 1;
-                break;
-            case 0x06: //Login
-                    connected_flag = handle_login(client_socket,payload_buff);
-                break;
-            case 0x7:  //Logout
-                if(connected_flag)
-                    connected_flag = handle_logout(client_socket);
-                else
-                    general_error_flag = 1;
-                break;
-            default:
-                /* code pour gérer une demande inconnue */
-                general_error_flag = 1;
-                break;
-        }
-        if(general_error_flag)
-        {
-            struct packet* packet_buff = malloc(sizeof(struct packet));
-            packet_buff->type = 0x88;
-            packet_buff->Status = 0x00;
-            packet_buff->payload = NULL;
-            send_packet(client_socket,packet_buff);
-            free(packet_buff);
+                    break;
+            }
+            if(general_error_flag)
+            {
+                struct packet* packet_buff = malloc(sizeof(struct packet));
+                packet_buff->type = 0x88;
+                packet_buff->Status = 0x00;
+                packet_buff->payload = NULL;
+                send_packet(client_socket,packet_buff);
+                free(packet_buff);
+            }
         }
         //Clear mallocs after each command
         deletePayload(&payload_buff->payload);

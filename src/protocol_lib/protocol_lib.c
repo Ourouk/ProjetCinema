@@ -1,4 +1,5 @@
 #include "protocol_lib.h"
+#include <errno.h>
 
 //MANAGING THE PAYLOAD
 // Function to create a new parameter
@@ -147,8 +148,9 @@ struct packet *recv_packet(int socket) {
     while (bytes_received < packetHeader_size) {
         ssize_t result = recv(socket, smallHeader_buffer + bytes_received, packetHeader_size - bytes_received, 0);
         if (result <= 0) {
-            perror("Error receiving header data");
+            fprintf(stderr, "Error receiving header data %s\n", strerror(errno));
             free(smallHeader_buffer);
+            close(socket);
             return NULL;
         }
         bytes_received += result;
