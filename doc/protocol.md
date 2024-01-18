@@ -40,19 +40,21 @@ Request codes:
 - 0x05: Add a show
 - 0x06: Login
 - 0x07: Logout
+- 0x08: Encryption flag
 
 Response codes:
 
 - 0x81: Movie list
 - 0x02: Get available shows for a Movie
 - 0x83: Reservation confirmation
-- 0x84: Authentification | No Payload
+- 0x84: Authentication | No Payload
 - 0x85: Add a movie | No Payload
 - 0x86: Add a movie max number of seat | No Payload
 - 0x87: Add a Show
 - 0x88: General Error
 - 0x89: Login
 - 0x90: Logout
+- 0x91: Encryption response
 
 Status codes:
 

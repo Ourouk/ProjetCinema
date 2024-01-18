@@ -52,7 +52,7 @@ void destroy_packet(struct packet *msg)
     deletePayload(&msg->payload);
     free(msg);
 }
-int send_packet(int socket, struct packet *msg)
+int send_packet(int socket, struct packet *msg,void * encryption_flag)
 {
     fprintf(stdout, "Begin Network Log for send_packet\n");
 
@@ -83,6 +83,17 @@ int send_packet(int socket, struct packet *msg)
             count++;
         }
         buffer_payload = string_buffer;
+        //Encrypt the payload
+        u_int8_t *encryption_flag_ptr = (u_int8_t *)encryption_flag; //Need casting to avoid pointer arithmetic
+        if (*encryption_flag_ptr == 1)
+        {
+            char aes_key[17] = AES_DEFAULT_KEY;
+            string_size = (string_size + 15 / 16)*16; // +15/16 to round up
+            char *encrypted_payload = malloc(string_size);
+            encryptAES_ECB(buffer_payload, aes_key, encrypted_payload);
+            free(buffer_payload);
+            buffer_payload = encrypted_payload;
+        }
     }else
     {
         buffer_payload = NULL;
@@ -128,8 +139,8 @@ int send_packet(int socket, struct packet *msg)
     fprintf(stdout, "Ending Network Log for send_packet\n\n");
     return 0;
 }
-//TODO: If a socket error happen automaticly close the socket and close the thread
-struct packet *recv_packet(int socket) {
+//DONE: If a socket error happen automatically close the socket and close the thread
+struct packet *recv_packet(int socket,void * encryption_flag) {
     fprintf(stdout, "Begin Network Log for recv_packet\n");
     struct packet_header {
         uint8_t type;
@@ -138,12 +149,10 @@ struct packet *recv_packet(int socket) {
     };
     size_t packetHeader_size = sizeof(u_int8_t)+sizeof(u_int8_t)+sizeof(size_t);
     void * smallHeader_buffer = malloc(packetHeader_size);
-    // struct packet_header *header_buffer = malloc(sizeof(struct packet_header));
     if (smallHeader_buffer == NULL) {
         perror("Error allocating memory for header");
         return NULL;
     }
-    // memset(header_buffer, 0, sizeof(struct packet_header));
     unsigned long bytes_received = 0;
     while (bytes_received < packetHeader_size) {
         ssize_t result = recv(socket, smallHeader_buffer + bytes_received, packetHeader_size - bytes_received, 0);
@@ -189,7 +198,6 @@ struct packet *recv_packet(int socket) {
 
             bytes_received += result;
         }
-
         fprintf(stdout, "Payload: %s\n", payload);
         fprintf(stdout, "Payload's bytes received: %lu\n", bytes_received);
         if (payload == NULL || payload[0] == '\0')
@@ -197,6 +205,18 @@ struct packet *recv_packet(int socket) {
             param = NULL;
         }else
         {
+            u_int8_t *encryption_flag_ptr = (u_int8_t *)encryption_flag; //Need casting to avoid pointer arithmetic
+            if (*encryption_flag_ptr == 1)
+            {
+                char aes_key[17] = AES_DEFAULT_KEY;
+                unsigned long block_nbr = (header_buffer->payload_size) / 16;
+                if(header_buffer->payload_size % 16 != 0)
+                    return NULL; //The payload is not a multiple of 16
+                char *decrypted_payload = malloc(header_buffer->payload_size);
+                decryptAES_ECB(payload, aes_key, decrypted_payload, block_nbr);
+                free(payload);
+                payload = decrypted_payload;
+            }
             char **saveptr = NULL; // Remove 'restrict' since it's not necessary here
             char *token = strtok_r(payload, ",", &saveptr);
             if (token == NULL) {
@@ -243,4 +263,29 @@ struct packet *recv_packet(int socket) {
     }
 
     return msg;
+}
+
+
+
+/*Encryption tools*/
+
+void encryptAES_ECB(const unsigned char *plaintext, const unsigned char *key, unsigned char *ciphertext) {
+    AES_KEY aesKey;
+    AES_set_encrypt_key(key, 128, &aesKey);
+    unsigned long block_nbr = (strlen(plaintext)+15)/16;
+    for(int i = 0; i < block_nbr; i++)
+    {
+        memset(ciphertext + (i * 16), 0, 16); // Set the ciphertext text to 0
+        AES_encrypt(plaintext + (i * 16), ciphertext + (i * 16), &aesKey);
+    }
+}
+
+void decryptAES_ECB(const unsigned char *ciphertext, const unsigned char *key, unsigned char *decryptedtext, unsigned long block_nbr) {
+    AES_KEY aesKey;
+    AES_set_decrypt_key(key, 128, &aesKey);
+    for(int i = 0; i < block_nbr; i++)
+    {
+        memset(decryptedtext + (i * 16), 0, 16); // Set the decrypted text to 0
+        AES_decrypt(ciphertext + (i * 16), decryptedtext + (i * 16), &aesKey);
+    }
 }

@@ -13,6 +13,7 @@
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
 #define SQLITE_MAX_SIZE 99
+u_int8_t * encryption_flag;
 
 int CreateSocket();
 void handle_get_movie_list(int socket);
@@ -35,6 +36,7 @@ int main(int argc,char* argv[]) {
         }
     int choice;
     u_int8_t fini = 0,connected = 0,logged = 0;
+    encryption_flag = malloc(sizeof(u_int8_t));
     while(!fini)
     {
         if (argc == 2) { choice = atoi(argv[1]); fini = 1; }
@@ -75,6 +77,7 @@ int main(int argc,char* argv[]) {
             default : fini = 1 ; break;
         }
     }
+    free(encryption_flag);
     return 0;
 }
 void handle_get_movie_list(int socket){
@@ -82,10 +85,10 @@ void handle_get_movie_list(int socket){
     packet->type = 0x01;
     packet->Status = 0x01;
     packet->payload = NULL;
-    send_packet(socket,packet);
+    send_packet(socket,packet,encryption_flag);
     deletePayload(&packet->payload);
     //Wait to recv the packet
-    packet =  recv_packet(socket);
+    packet =  recv_packet(socket,encryption_flag);
     struct Parameter * current = packet->payload;
     int count = 0;uint8_t last = 0;
     if(current == NULL)
@@ -119,10 +122,10 @@ void handle_get_shows(int socket) {
     packet->type = 0x02;
     packet->Status = 0x01;
     packet->payload = createParameter(movie_id);
-    send_packet(socket,packet);
+    send_packet(socket,packet,encryption_flag);
     deletePayload(&packet->payload);
     //Wait to recv the packet
-    packet =  recv_packet(socket);
+    packet =  recv_packet(socket,encryption_flag);
     struct Parameter * current = packet->payload;
     if(current != NULL)
     {
@@ -202,10 +205,10 @@ void handle_add_movie(int socket) {
     appendParameter(packet->payload,genre);
     appendParameter(packet->payload,director);
     appendParameter(packet->payload,release_date);
-    send_packet(socket,packet);
+    send_packet(socket,packet,encryption_flag);
     deletePayload(&packet->payload);
     free(packet);
-    packet = recv_packet(socket);
+    packet = recv_packet(socket,encryption_flag);
     if(packet->Status == 0x01)
     {
         printf("Show added successfully\n");
@@ -277,10 +280,10 @@ void handle_add_show(int socket) {
     appendParameter(packet->payload,start_time);
     appendParameter(packet->payload,end_time);
     appendParameter(packet->payload,show_date);
-    send_packet(socket,packet);
+    send_packet(socket,packet,encryption_flag);
     deletePayload(&packet->payload);
     free(packet);
-    packet = recv_packet(socket);
+    packet = recv_packet(socket,encryption_flag);
     if(packet->Status == 0x01)
     {
         printf("Show added successfully\n");
@@ -339,7 +342,7 @@ void handle_reserve_seats(int socket) {
     packet->Status = 0x01;
     packet->payload = createParameter(show_id);
     appendParameter(packet->payload,nbr_seats);
-    send_packet(socket,packet);
+    send_packet(socket,packet,encryption_flag);
     deletePayload(&packet->payload);
     free(packet);
 }
@@ -359,10 +362,10 @@ u_int8_t handle_login(int socket) {
     packet->Status = 0x01;
     packet->payload = createParameter(username);
     appendParameter(packet->payload,password);
-    send_packet(socket,packet);
+    send_packet(socket,packet,encryption_flag);
     deletePayload(&packet->payload);
     //Wait to recv the packet
-    packet =  recv_packet(socket);
+    packet =  recv_packet(socket,encryption_flag);
     if(packet->Status == 0x01)
     {
         printf("Login successful\n");
@@ -380,10 +383,10 @@ u_int8_t handle_logout(int socket) {
     packet->type = 0x07;
     packet->Status = 0x01;
     packet->payload = NULL;
-    send_packet(socket,packet);
+    send_packet(socket,packet,encryption_flag);
     deletePayload(&packet->payload);
     //Wait to recv the packet
-    packet =  recv_packet(socket);
+    packet =  recv_packet(socket,encryption_flag);
     if(packet->Status == 0x01)
     {
         printf("Logout successful\n");
@@ -426,9 +429,34 @@ u_int8_t Connect(int socket) {
         perror("Connection failed");
         exit(EXIT_FAILURE);
     }
-    return 1;
+    printf("Connection successful\n");
+    free(ip);
+    free(port);
+    char choice;
+    printf("Do you want to enable encryption? (Y/N): ");
+    scanf(" %c", &choice);
+    fflush(stdin);
+    if (choice == 'Y' || choice == 'y') {
+        //Code segment to enable encryption server side
+        struct packet * packet = malloc(sizeof(struct packet));
+        packet->type = 0x08;
+        packet->Status = 0x01;
+        packet->payload_size = 0;
+        packet->payload = NULL;
+        send_packet(socket,packet,encryption_flag);
+        free(packet);
+        packet = recv_packet(socket,encryption_flag);
+        if(packet->Status == 0x01)
+            *encryption_flag = 1;
+        else{
+            *encryption_flag = 0;
+            printf("Encryption failed\n");
+        }
+    } else {
+        *encryption_flag = 0;
+    }
+    printf("Encryption enabled: %d\n", *encryption_flag);
 }
-
 u_int8_t Disconnect(int client_fd) {
     close(client_fd);
     printf("-----------------You're disconnected---------------------------------------\n");

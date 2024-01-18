@@ -22,9 +22,7 @@
 #define SQLITE3_MAX_LENGTH 1000
 //Define server handling of each client
 void *handle_client(void *) ;
-//Database pre-made tools
-int open_database(const char* path);
-void init_table(sqlite3 *db);
+
 // Define the servers commands handlers
 void handle_get_movie_list(int);
 void handle_get_shows(int,struct packet*);
@@ -33,71 +31,22 @@ uint8_t handle_logout(int);
 void handle_reserve_seats(int,struct packet*);
 void handle_add_movie(int,struct packet*);
 void handle_add_show(int,struct packet*);
+void handle_encryption_status(int ,struct packet*);
 
-pthread_mutex_t password_mutex; // Declare a mutex variable
-
-void hash_password(const char *password, char *hashed_password) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((unsigned char*)password, strlen(password), hash);
-    for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-        sprintf(hashed_password + (i * 2), "%02x", hash[i]);
-}
-//Create hashed csv files
-void create_account(const char *username, const char *password) {
-    char hashed_password[65];
-    hash_password(password, hashed_password);
-    FILE *file = fopen("data/passwords.csv", "r");
-    char line[256];
-    while (fgets(line, sizeof(line), file)) {
-        char *comma = strchr(line, ',');
-        *comma = '\0';
-        if (strcmp(line, username) == 0) {
-            fclose(file);
-            printf("Username already exists.\n");
-            return;
-        }
-    }
-    fclose(file);
-    file = fopen("data/passwords.csv", "a");
-    fprintf(file, "%s,%s\n", username, hashed_password);
-    fclose(file);
-}
+/*TOOLS*/
+//Database pre-made tools
+int open_database(const char* path);
+void init_table(sqlite3 *db);
+//Encryption
+void hash_password(const char *, char *);
+void create_account(const char *, const char *);
+int login(const char *, const char *);
 
 
 
-int login(const char *username, const char *password) {
-    pthread_mutex_lock(&password_mutex); // Lock the mutex before accessing the file
-    char hashed_password[65];
-    hash_password(password, hashed_password);
-    FILE *file = fopen("data/passwords.csv", "r");
-    char line[256];
-    while (fgets(line, sizeof(line), file)) {
-        char *comma = strchr(line, ',');
-        char *username_f = strtok(line, ","); // Tokenize string before comma
-        char *password_f = strtok(comma + 1, "\n"); // Tokenize string after comma
-        if (strcmp(username_f, username) == 0 && strcmp(password_f, hashed_password) == 0) {
-            fclose(file);
-            pthread_mutex_unlock(&password_mutex); // Unlock the mutex after accessing the file
-            return 1;
-        }
-    }
-    fclose(file);
-    pthread_mutex_unlock(&password_mutex); // Unlock the mutex after accessing the file
-    return 0;
-}
 
-//Note the technical choice to choose sqlite3 as a database limit the use of mutex sadly...
-sqlite3 *db;
-pthread_key_t thread_specific_db;
-void cleanup(void *value) {
-    // Cleanup function called when the thread exits
-    printf("Cleaning up thread-specific data\n");
-    // Perform ,struct packet* payload_buffany necessary cleanup for the specific data
-    sqlite3_close(value); // For example, free allocated memory
-}
-void initialize_thread_specific_data() {
-    pthread_key_create(&thread_specific_db,cleanup);
-}
+
+
 // Warning do not strtok but strtok_r because static variable would cause problems
 int main() {
     // Create a socket
@@ -150,6 +99,26 @@ int main() {
     }
     return 0;
 }
+/*THREADED PART*/
+
+//Note the technical choice to choose sqlite3 as a database limit the use of mutex sadly...
+sqlite3 *db;
+pthread_key_t thread_specific_db;
+pthread_key_t thread_specific_encryption_flag;
+pthread_mutex_t password_mutex; // Declare a mutex variable
+
+void cleanup(void *value) {
+    // Cleanup function called when the thread exits
+    printf("Cleaning up thread-specific data\n");
+    // Perform ,struct packet* payload_buffany necessary cleanup for the specific data
+    sqlite3_close(value); // For example, free allocated memory
+}
+void initialize_thread_specific_data() {
+    pthread_key_create(&thread_specific_db,cleanup);
+    pthread_key_create(&thread_specific_encryption_flag,cleanup);
+}
+
+
 
 void *handle_client(void *arg) {
     int client_socket = *((int *)arg);
@@ -158,9 +127,12 @@ void *handle_client(void *arg) {
     open_database("data/sqlite.db");
     init_table(db);
     u_int8_t connected_flag = 1;
+    u_int8_t * encryption_flag = malloc(sizeof(u_int8_t));
+    *encryption_flag = 0; //default state
+    pthread_setspecific(thread_specific_encryption_flag, encryption_flag);
     while(connected)
     {
-        struct packet*  payload_buff = recv_packet(client_socket);
+        struct packet*  payload_buff = recv_packet(client_socket,pthread_getspecific(thread_specific_encryption_flag));
         //Handle Command
         if(payload_buff == NULL)
         {
@@ -204,6 +176,9 @@ void *handle_client(void *arg) {
                     else
                         general_error_flag = 1;
                     break;
+                case 0x08: //Encryption status
+                        handle_encryption_status(client_socket,payload_buff);
+                    break;
                 default:
                     /* code pour gérer une demande inconnue */
                     general_error_flag = 1;
@@ -215,7 +190,7 @@ void *handle_client(void *arg) {
                 packet_buff->type = 0x88;
                 packet_buff->Status = 0x00;
                 packet_buff->payload = NULL;
-                send_packet(client_socket,packet_buff);
+                send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
                 free(packet_buff);
             }
         }
@@ -223,6 +198,7 @@ void *handle_client(void *arg) {
         deletePayload(&payload_buff->payload);
         free(payload_buff);
     }
+    free(encryption_flag);
     close(client_socket);
     pthread_exit(NULL);
 }
@@ -259,7 +235,7 @@ void handle_get_movie_list(int client_socket) {
     packet_buff->type = 0x81;
     packet_buff->Status = 0x01;
     packet_buff->payload = parameter_buff;
-    send_packet(client_socket,packet_buff);
+    send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
     deletePayload(&packet_buff->payload);
     free(packet_buff);
 }
@@ -304,7 +280,7 @@ void handle_get_shows(int client_socket,struct packet* payload_buff) {
     packet_buff->type = 0x82;
     packet_buff->Status = 0x01;
     packet_buff->payload = parameter_buff;
-    send_packet(client_socket,packet_buff);
+    send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
     deletePayload(&packet_buff->payload);
     free(packet_buff);
 }
@@ -318,7 +294,7 @@ uint8_t handle_login(int client_socket,struct packet* payload_buff)
         packet_buff->type = 0x83;
         packet_buff->Status = 0x01;
         packet_buff->payload = NULL;
-        send_packet(client_socket,packet_buff);
+        send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
         return 1;
     }
     else
@@ -327,7 +303,7 @@ uint8_t handle_login(int client_socket,struct packet* payload_buff)
         packet_buff->type = 0x83;
         packet_buff->Status = 0x00;
         packet_buff->payload = NULL;
-        send_packet(client_socket,packet_buff);
+        send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
         return 0;
     }
 }
@@ -337,7 +313,7 @@ uint8_t handle_logout(int client_socket)
     packet_buff->type = 0x84;
     packet_buff->Status = 0x01;
     packet_buff->payload = NULL;
-    send_packet(client_socket,packet_buff);
+    send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
     free(packet_buff);
     return 0;
 }
@@ -359,7 +335,7 @@ void handle_reserve_seats(int client_socket,struct packet* payload_buff)
     }else{
         packet_buff->Status = 0x01;
     }
-    send_packet(client_socket,packet_buff);
+    send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
     deletePayload(&packet_buff->payload);
     free(packet_buff);
 }
@@ -381,7 +357,7 @@ void handle_add_movie(int client_socket,struct packet* payload_buff)
     }else{
         packet_buff->Status = 0x01;
     }
-    send_packet(client_socket,packet_buff);
+    send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
     deletePayload(&packet_buff->payload);
     free(packet_buff);
 }
@@ -403,9 +379,28 @@ void handle_add_show(int client_socket,struct packet* payload_buff)
     }else{
         packet_buff->Status = 0x01;
     }
-    send_packet(client_socket,packet_buff);
+    send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
     deletePayload(&packet_buff->payload);
     free(packet_buff);
+}
+void handle_encryption_status(int client_socket,struct packet* payload_buff)
+{
+    if(payload_buff->Status)
+    {
+        struct packet* packet_buff = malloc(sizeof(struct packet));
+        packet_buff->type = 0x91;
+        packet_buff->Status = 0x01;
+        packet_buff->payload = NULL;
+        send_packet(client_socket,packet_buff,pthread_getspecific(thread_specific_encryption_flag));
+        free(packet_buff);
+        u_int8_t * encryption_flag = pthread_getspecific(thread_specific_encryption_flag);
+        *encryption_flag = 1;
+    }else
+    {
+        u_int8_t * encryption_flag = pthread_getspecific(thread_specific_encryption_flag);
+        *encryption_flag = 0;
+    }
+
 }
 //Database Management
 //Database pre-made tools
@@ -445,4 +440,54 @@ void init_table(sqlite3 *db) {
         }
     }
     sqlite3_finalize(stmt); // finalize the second statement here
+}
+
+
+//Account Management
+void hash_password(const char *password, char *hashed_password) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char*)password, strlen(password), hash);
+    for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+        sprintf(hashed_password + (i * 2), "%02x", hash[i]);
+}
+//Create hashed csv files
+void create_account(const char *username, const char *password) {
+    char hashed_password[65];
+    hash_password(password, hashed_password);
+    FILE *file = fopen("data/passwords.csv", "r");
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        char *comma = strchr(line, ',');
+        *comma = '\0';
+        if (strcmp(line, username) == 0) {
+            fclose(file);
+            printf("Username already exists.\n");
+            return;
+        }
+    }
+    fclose(file);
+    file = fopen("data/passwords.csv", "a");
+    fprintf(file, "%s,%s\n", username, hashed_password);
+    fclose(file);
+}
+
+int login(const char *username, const char *password) {
+    pthread_mutex_lock(&password_mutex); // Lock the mutex before accessing the file
+    char hashed_password[65];
+    hash_password(password, hashed_password);
+    FILE *file = fopen("data/passwords.csv", "r");
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        char *comma = strchr(line, ',');
+        char *username_f = strtok(line, ","); // Tokenize string before comma
+        char *password_f = strtok(comma + 1, "\n"); // Tokenize string after comma
+        if (strcmp(username_f, username) == 0 && strcmp(password_f, hashed_password) == 0) {
+            fclose(file);
+            pthread_mutex_unlock(&password_mutex); // Unlock the mutex after accessing the file
+            return 1;
+        }
+    }
+    fclose(file);
+    pthread_mutex_unlock(&password_mutex); // Unlock the mutex after accessing the file
+    return 0;
 }
