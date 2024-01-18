@@ -137,21 +137,48 @@ public class httpSmartHttpHandler {
         }
     }
 
-
-    private String displayMovieList(){
-    cServerActions cServerActions = new cServerActions("localhost", 5050);
-    List<String> listOffMovies;
-    try {
-            listOffMovies = cServerActions.getMoviesList();
+    private String displayMovieList() {
+        cServerActions cServerActions = new cServerActions("localhost", 5050);
+        try {
+            List<String> listOffMovies = cServerActions.getMoviesList();
             StringBuilder builder = new StringBuilder();
             builder.append("<form action=\"/show_selector.shtml\" method=\"post\">\n");
-            for(String s : listOffMovies) {
-                builder.append("<label for=\"").append(s).append("\">\n");
-                builder.append("<input type=\"checkbox\" id=\"").append(s).append("\" name=\"options[]\" value=\"").append(s).append("\">\n");
-                builder.append(s).append("\n");
-                builder.append("</label>\n");
+            builder.append("<label for=\"movie_list\">Choose a movie : </label>\n");
+            builder.append("<select name=\"movie_list\" id=\"movie_list\">\n");
+            int listOffMovies_size = listOffMovies.size();
+            for (int i = 0; i < listOffMovies_size; i+=2) {
+                builder.append("<option value=\"").append(listOffMovies.get(i)).append("\">").append(listOffMovies.get(i+1)).append("</option>\n"); 
             }
-            builder.append("<input type=\"submit\" value=\"Submit\">\n");
+            builder.append("</select>\n");
+            builder.append("<br>\n<input type=\"submit\" value=\"Submit\">\n");
+            builder.append("</form>\n");
+            String result = builder.toString();
+            return result;
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return "Error while getting the list of shows";
+    }
+
+    private String displayShowList(){
+    cServerActions cServerActions = new cServerActions("localhost", 5050);
+    try {
+            String movie_id = httpClientHandlerThread.requestBody.split("=")[1];
+            if(movie_id == null)
+                return "Error while getting the list of shows";
+            List<String> listOffShows = cServerActions.getShowList(movie_id);
+            StringBuilder builder = new StringBuilder();
+            builder.append("<form action=\"/thank_you.shtml\" method=\"post\">\n");
+            builder.append("<label for=\"movie_list\">Choose a movie : </label>\n");
+            builder.append("<select name=\"movie_list\" id=\"movie_list\">\n");
+            int listOffMovies_size = listOffShows.size();
+            for (int i = 0; i < listOffMovies_size; i+=5) {
+                builder.append("<option value=\"").append(listOffShows.get(i)).append("\">").append(listOffShows.get(i+2)+ " to " + listOffShows.get(i+3) + " le " + listOffShows.get(i+4)).append("</option>\n"); 
+            }
+            builder.append("</select>\n");
+            builder.append(" <label for=\"email\">Email:</label>\n<input type=\"email\" id=\"email\" name=\"email\" required>");
+            builder.append("<br>\n<input type=\"submit\" value=\"Submit\">\n");
             builder.append("</form>\n");
             String result = builder.toString();
             return result;
@@ -162,36 +189,18 @@ public class httpSmartHttpHandler {
         return "Error while getting the list of movies";
     }
 
-    private String displayShowList() {
-        cServerActions cServerActions = new cServerActions("localhost", 5050);
-        try {
-            List<String> listOffShows = cServerActions.getShowList(httpClientHandlerThread.requestBody);
-            StringBuilder builder = new StringBuilder();
-            builder.append("<form action=\"/thank_you.html\" method=\"post\">\n");
-            for(String s : listOffShows) {
-                builder.append("<label for=\"").append(s).append("\">\n");
-                builder.append("<input type=\"checkbox\" id=\"").append(s).append("\" name=\"options[]\" value=\"").append(s).append("\">\n");
-                builder.append(s).append("\n");
-                builder.append("</label>\n");
-            }
-            builder.append("<input type=\"submit\" value=\"Submit\">\n");
-            builder.append("</form>\n");
-            String result = builder.toString();
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        return "Error while getting the list of shows";
-    }
 
     private String mailsent() {
-        return "to_implement";
+        HashMap form_hashmap = body_parser(httpClientHandlerThread.requestBody);
+        smtpSender smtpSender = new smtpSender(form_hashmap.get("email").toString(), "Your reservation has been confirmed");
+        smtpSender.run();
+        return "A mail has been sent to " + form_hashmap.get("email").toString();
     }
 
     private HashMap body_parser(String body)
     {
         HashMap form_hashmap = new HashMap();
-        String[] body_list = httpClientHandlerThread.requestBody.split("\n");
+        String[] body_list = httpClientHandlerThread.requestBody.split("&");
         for (String line: body_list) {
             String[] split_key = line.split("=");
             form_hashmap.put(split_key[0], split_key[1]);

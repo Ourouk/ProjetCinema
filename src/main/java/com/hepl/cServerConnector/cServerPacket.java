@@ -5,9 +5,12 @@ import java.util.List;
 public class cServerPacket {
     byte type;
     byte status;
-    long payloadSize;
+    int payloadSize;
     List<String> payload;
-
+    public cServerPacket() {
+        this.payloadSize = 0;
+        this.payload = new java.util.ArrayList<String>();
+    }
     public void addPayload(String data) {
         payload.add(data);
         payloadSize += data.length();

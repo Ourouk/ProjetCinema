@@ -1,9 +1,11 @@
 package com.hepl.cServerConnector;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 public class cServerSocket {
     private Socket socket;
@@ -15,11 +17,20 @@ public class cServerSocket {
         OutputStream out = socket.getOutputStream();
         System.out.println("Begin Network Log for send_packet");
         // The header is sent first
-        out.write(packet.type);
-        out.write(packet.status);
-        ByteBuffer bb = ByteBuffer.allocate(8);
-        bb.putLong(packet.payloadSize);
-        out.write(bb.array());
+        ByteArrayOutputStream header = new ByteArrayOutputStream();
+        header.write(packet.type);
+        header.write(packet.status);
+        // Convert int to byte array
+        byte[] sizeBytes = new byte[4]; // Assuming int is 4 bytes
+        sizeBytes[3] = (byte) (packet.payloadSize >> 24);
+        sizeBytes[2] = (byte) (packet.payloadSize >> 16);
+        sizeBytes[1] = (byte) (packet.payloadSize >> 8);
+        sizeBytes[0] = (byte) packet.payloadSize;
+
+        // Write the byte array to the output stream
+        header.write(sizeBytes);
+        out.write(header.toByteArray());
+
         System.out.println("Header: Type :" + packet.type + ", Status : " + packet.status + ", Payload Size : " + packet.payloadSize);
         // Then the payload
         if(packet.payloadSize > 0)

@@ -104,7 +104,7 @@ int send_packet(int socket, struct packet *msg,void * encryption_flag)
     // memcpy(packet_buffer, msg, sizeof(struct packet));
 
     //Reduce the size of the packet to the header size
-    size_t packetHeader_size = sizeof(u_int8_t)+sizeof(u_int8_t)+sizeof(size_t);
+    size_t packetHeader_size = sizeof(u_int8_t)+sizeof(u_int8_t)+sizeof(int);
     void * packet_buffer = malloc(packetHeader_size);
     if (packet_buffer == NULL) {
         perror("Error allocating memory for packet");
@@ -112,7 +112,7 @@ int send_packet(int socket, struct packet *msg,void * encryption_flag)
     }
     memcpy(packet_buffer,&(msg->type), sizeof(u_int8_t));
     memcpy(packet_buffer + sizeof(u_int8_t),&(msg->Status),  sizeof(u_int8_t));
-    memcpy(packet_buffer + sizeof(u_int8_t) + sizeof(u_int8_t),&(msg->payload_size),sizeof(size_t));
+    memcpy(packet_buffer + sizeof(u_int8_t) + sizeof(u_int8_t),&(msg->payload_size),sizeof(int));
 
     fprintf(stdout, "Packet Header : Type : %x, Status : %d, Payload Size : %zu\n", msg->type, msg->Status, msg->payload_size);
     fflush(stdout);
@@ -145,9 +145,9 @@ struct packet *recv_packet(int socket,void * encryption_flag) {
     struct packet_header {
         uint8_t type;
         uint8_t Status;
-        size_t payload_size;
+        int payload_size;
     };
-    size_t packetHeader_size = sizeof(u_int8_t)+sizeof(u_int8_t)+sizeof(size_t);
+    size_t packetHeader_size = sizeof(u_int8_t)+sizeof(u_int8_t)+sizeof(int);
     void * smallHeader_buffer = malloc(packetHeader_size);
     if (smallHeader_buffer == NULL) {
         perror("Error allocating memory for header");

@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Thank You</title>
+</head>
+<body>
+    <h1>Thank You!</h1>
+    <p>Thank you for your support and for visiting our website.</p>
+    <!-- Add Here the mail sent -->
+    <p>Have a wonderful day!</p>
+</body>
+</html>

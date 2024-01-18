@@ -39,6 +39,7 @@ public class secureSocketListener implements Runnable{
     @Override
     public void run() {
 
+        System.setProperty("javax.net.debug", "none");
         Logger logger = Logger.getLogger(secureSocketListener.class.getName());
         logger.setLevel(Level.INFO);
         try {

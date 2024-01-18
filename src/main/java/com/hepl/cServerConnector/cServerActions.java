@@ -39,7 +39,6 @@ public class cServerActions {
         //No right needed to get the list of Shows
         p.type = 0x02;
         p.status = 0x01;
-        p.payloadSize = 0x01;
         p.addPayload(movie);
         s.send(p);
         //Wait to receive the list of shows

@@ -6,10 +6,11 @@
     import com.hepl.Logger;
     import com.hepl.socket.crypto.ssl.secureSocketListener;
 
-    import java.io.IOException;
-    import java.net.*;
+import java.net.*;
     import java.io.*;
-    import java.nio.file.Files;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
     import java.nio.file.Path;
     import java.nio.file.Paths;
     import java.util.HashMap;
@@ -26,6 +27,7 @@
         private Socket socket = null;
         private BufferedReader input = null;
         private DataOutputStream output = null;
+        private InputStream input_stream = null;
 
 
 
@@ -70,7 +72,8 @@
         public void run() {
             Logger.log("Http Thread Initialised : " + socket.getInetAddress().getHostAddress() + ':' + socket.getPort());
             try {
-                input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                this.input_stream = socket.getInputStream();
+                input = new BufferedReader(new InputStreamReader(input_stream,StandardCharsets.UTF_8));
                 output = new DataOutputStream(socket.getOutputStream());
 
                 //Read the whole content
@@ -108,14 +111,15 @@
                         }
                         requestBody = new String(buff);
                     }catch (IOException e) {
+                        System.out.println("Error while reading POST body");
                         throw new RuntimeException(e);
                     }
                 }else {
                     requestBody = "";
                 }
 
-                Logger.log("Receive Command : \n" + httpCommand);
-                Logger.log("Receive POST Body : \n" + requestBody);
+                Logger.log("Receive Command : " + httpCommand);
+                Logger.log("Receive POST Body : " + requestBody);
                 switch (httpMethod) {
                     case "GET" -> this.GEThandler();
 //                    case "HEAD" -> this.HEADhandler();

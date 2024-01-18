@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>My Page</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule</title>
 </head>
 <body>
-    <!-- Your content here -->
+    <h1>The Scheduled Shows for this movies</h1>
+    <!-- displayShowList -->
 </body>
 </html>
