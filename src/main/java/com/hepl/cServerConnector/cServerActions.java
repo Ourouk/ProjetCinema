@@ -45,4 +45,19 @@ public class cServerActions {
         p = s.receive();
         return p.payload;
     }
+    public boolean reserveSeats(int seat) throws IOException {
+        cServerSocket s = new cServerSocket(host, port);
+        cServerPacket p = new cServerPacket();
+        //No right needed to reserve seats
+        p.type = 0x03;
+        p.status = 0x01;
+        p.addPayload(Integer.toString(seat));
+        s.send(p);
+        cServerPacket packet = s.receive();
+        packet.status = 0x01;
+        if(packet.status == 0x01)
+            return true;
+        else
+            return false;
+    }
 }

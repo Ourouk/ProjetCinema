@@ -178,10 +178,11 @@ public class httpSmartHttpHandler {
             }
             builder.append("</select>\n");
             builder.append(" <label for=\"email\">Email:</label>\n<input type=\"email\" id=\"email\" name=\"email\" required>");
+            builder.append(" <label for=\"Number of seat\">seat_nbr:</label>\n<input type=\"seat_nbr\" id=\"seat_nbr\" name=\"seat_nbr\" required>");
             builder.append("<br>\n<input type=\"submit\" value=\"Submit\">\n");
             builder.append("</form>\n");
             String result = builder.toString();
-            return result;
+            return result;  
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
@@ -192,6 +193,16 @@ public class httpSmartHttpHandler {
 
     private String mailsent() {
         HashMap form_hashmap = body_parser(httpClientHandlerThread.requestBody);
+        cServerActions cServerActions = new cServerActions("localhost", 5050);
+        try {
+            cServerActions.reserveSeats(Integer.parseInt(form_hashmap.get("seat_nbr").toString()));
+        } catch (NumberFormatException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } // To get the email
         smtpSender smtpSender = new smtpSender(form_hashmap.get("email").toString(), "Your reservation has been confirmed");
         smtpSender.run();
         return "A mail has been sent to " + form_hashmap.get("email").toString();
